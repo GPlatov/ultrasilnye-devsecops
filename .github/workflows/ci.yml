@@ -19,7 +19,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Vulnerability scan (Trivy FS)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           scan-type: fs
           ignore-unfixed: true
@@ -31,4 +31,3 @@ jobs:
         run: |
           echo "CI OK"
           ls -la
-          
