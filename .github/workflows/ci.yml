@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: ["main"]
 
+permissions: 
+  contests: read
+
 jobs:
   basic:
     runs-on: ubuntu-latest
