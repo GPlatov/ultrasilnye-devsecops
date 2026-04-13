@@ -7,7 +7,7 @@ on:
     branches: ["main"]
 
 permissions: 
-  contests: read
+  contents: read
 
 jobs:
   basic:
