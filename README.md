@@ -33,6 +33,7 @@
 - `.github/workflows/ci.yml` — основной CI workflow
 - `policies/` — правила и документы по security gates
 - `reports/` — здесь будут оформленные кейсы
+- `reports/case01_security_pipeline.md` — первый оформленный кейс по построению security pipeline
 
 ---
 
@@ -47,6 +48,7 @@
 - исправил workflow через `permissions: contents: read`
 - зафиксировал изменения через commit и push
 - оформил знания в собственную knowledge base
+- оформил первый case-study в папке `reports`
 
 ---
 
