@@ -2798,3 +2798,1000 @@ sudo = выполнить команду с повышенными правам�
 при ошибке Permission denied сначала смотрю права и владельца,
 а не сразу бездумно пишу sudo.
 ```
+
+## 16) Linux 2.5: apt, пакеты, dpkg и проверка установленных программ
+
+### Цель блока
+
+Научиться работать с пакетами в Ubuntu:
+
+```text
+искать пакет
+смотреть информацию о пакете
+устанавливать пакет
+проверять, появилась ли команда
+удалять пакет
+проверять, установлен ли пакет
+смотреть доступные обновления
+понимать разницу между apt и dpkg
+```
+
+Это важно для DevOps, потому что инженер постоянно работает с программами и утилитами на сервере:
+
+```text
+поставить nginx
+поставить git
+поставить curl
+поставить docker
+проверить, установлен ли openssh-server
+понять, почему команда не найдена
+проверить, какие пакеты можно обновить
+безопасно посмотреть план upgrade
+```
+
+---
+
+### Что такое пакет
+
+Пакет — это программа или системный компонент, который можно установить в систему через менеджер пакетов.
+
+Примеры пакетов:
+
+```text
+bash
+openssh-server
+curl
+git
+nginx
+docker
+tree
+```
+
+Пакет может содержать:
+
+```text
+исполняемые файлы
+конфиги
+документацию
+служебные файлы
+зависимости
+```
+
+---
+
+### apt
+
+`apt` — это удобный высокоуровневый инструмент для работы с пакетами в Ubuntu/Debian.
+
+Главные действия через `apt`:
+
+```bash
+sudo apt update
+apt search package
+apt show package
+sudo apt install package
+sudo apt remove package
+apt list --installed
+apt list --upgradable
+apt upgrade --simulate
+```
+
+Главная мысль:
+
+```text
+для обычной работы с пакетами использую apt
+```
+
+---
+
+### update и upgrade
+
+Важно не путать:
+
+```bash
+sudo apt update
+```
+
+обновляет список доступных пакетов из репозиториев.
+
+Это не устанавливает обновления. Это обновляет “каталог” пакетов.
+
+Пример смысла:
+
+```text
+система сходила в репозитории и узнала,
+какие версии пакетов сейчас доступны
+```
+
+Команда:
+
+```bash
+sudo apt upgrade
+```
+
+обновляет уже установленные пакеты до новых доступных версий.
+
+Коротко:
+
+```text
+apt update  = обновить список пакетов
+apt upgrade = обновить установленные пакеты
+```
+
+---
+
+### apt search
+
+Команда:
+
+```bash
+apt search tree
+```
+
+ищет пакеты по имени и описанию.
+
+Смысл:
+
+```text
+найти, есть ли пакет tree в репозиториях
+```
+
+`apt search` может вывести не только точное совпадение, но и похожие пакеты, где слово встречается в имени или описании.
+
+---
+
+### apt show
+
+Команда:
+
+```bash
+apt show tree
+```
+
+показывает подробную информацию о конкретном пакете.
+
+В выводе можно увидеть:
+
+```text
+Package     — имя пакета
+Version     — версия
+Priority    — приоритет
+Section     — раздел
+Origin      — источник
+Maintainer  — сопровождающий
+Depends     — зависимости
+Download-Size — размер загрузки
+Description — описание
+```
+
+Пример смысла:
+
+```text
+перед установкой можно посмотреть,
+что это за пакет, откуда он берётся,
+какая версия будет установлена и для чего он нужен
+```
+
+---
+
+### Что такое команда в Linux
+
+Команда — это имя действия, которое shell пытается найти и выполнить.
+
+Примеры команд:
+
+```bash
+ls
+cd
+pwd
+cat
+grep
+apt
+tree
+systemctl
+```
+
+Команда может быть:
+
+```text
+1. отдельной программой на диске
+2. встроенной командой shell
+3. alias
+4. shell function
+```
+
+Пример отдельной программы:
+
+```bash
+tree
+```
+
+После установки она может лежать по пути:
+
+```text
+/usr/bin/tree
+```
+
+Пример встроенной команды shell:
+
+```bash
+cd
+```
+
+`cd` не обязан быть отдельным файлом, потому что смена текущей директории выполняется самой оболочкой.
+
+---
+
+### command -v
+
+Команда:
+
+```bash
+command -v tree
+```
+
+проверяет, найдёт ли shell команду `tree`, и показывает путь к ней.
+
+Если команда найдена, можно увидеть:
+
+```text
+/usr/bin/tree
+```
+
+Это значит:
+
+```text
+команда tree доступна
+shell знает, что при вводе tree надо запускать /usr/bin/tree
+```
+
+Если команда не найдена, вывода может не быть.
+
+Чтобы получить понятное сообщение, можно использовать:
+
+```bash
+command -v tree || echo "tree is not installed"
+```
+
+Смысл:
+
+```text
+если command -v tree ничего не нашёл,
+вывести сообщение tree is not installed
+```
+
+---
+
+### Установка пакета
+
+Команда:
+
+```bash
+sudo apt install -y tree
+```
+
+Разбор:
+
+```text
+sudo = выполнить с повышенными правами
+apt = менеджер пакетов
+install = установить пакет
+-y = автоматически ответить yes на подтверждение
+tree = имя пакета
+```
+
+Смысл:
+
+```text
+установить пакет tree без ручного подтверждения
+```
+
+После установки проверяем:
+
+```bash
+command -v tree
+tree --version
+```
+
+Если установка прошла успешно:
+
+```text
+command -v tree покажет путь к команде
+tree --version покажет версию установленной программы
+```
+
+---
+
+### Использование установленной команды tree
+
+Команда:
+
+```bash
+tree ~/linux-lab -L 2
+```
+
+Разбор:
+
+```text
+tree = показать структуру каталогов деревом
+~/linux-lab = какую папку показать
+-L 2 = ограничить глубину вывода двумя уровнями
+```
+
+Пример результата:
+
+```text
+/home/germanix/linux-lab
+├── day1
+│   └── hello.txt
+└── files-practice
+    ├── app.log
+    ├── archive
+    ├── note.txt
+    └── permissions-demo.txt
+```
+
+Смысл:
+
+```text
+tree удобно использовать, чтобы быстро увидеть структуру папок проекта
+```
+
+---
+
+### Удаление пакета
+
+Команда:
+
+```bash
+sudo apt remove -y tree
+```
+
+Разбор:
+
+```text
+sudo = выполнить с повышенными правами
+apt = менеджер пакетов
+remove = удалить пакет
+-y = автоматически подтвердить действие
+tree = имя пакета
+```
+
+Смысл:
+
+```text
+удалить установленный пакет tree
+```
+
+После удаления проверяем:
+
+```bash
+command -v tree || echo "tree is not installed"
+```
+
+---
+
+### Почему понадобился hash -r
+
+После удаления `tree` была ситуация:
+
+```bash
+command -v tree
+```
+
+всё ещё показывал:
+
+```text
+/usr/bin/tree
+```
+
+Хотя пакет уже был удалён.
+
+Причина:
+
+```text
+Bash может запоминать путь к ранее найденной команде,
+чтобы не искать её каждый раз заново.
+```
+
+Для сброса этого кеша используется:
+
+```bash
+hash -r
+```
+
+После этого проверка стала корректной:
+
+```bash
+command -v tree || echo "tree is not installed"
+ls -l /usr/bin/tree || echo "/usr/bin/tree file is gone"
+```
+
+Ожидаемый результат:
+
+```text
+tree is not installed
+ls: cannot access '/usr/bin/tree': No such file or directory
+/usr/bin/tree file is gone
+```
+
+Главная мысль:
+
+```text
+если пакет удалён, но shell как будто помнит старый путь,
+можно выполнить hash -r и проверить заново
+```
+
+---
+
+### Полный цикл установки и удаления пакета
+
+Практический цикл:
+
+```bash
+apt show tree
+
+command -v tree || echo "tree is not installed"
+
+sudo apt install -y tree
+
+command -v tree
+tree --version
+tree ~/linux-lab -L 2
+
+sudo apt remove -y tree
+
+hash -r
+command -v tree || echo "tree is not installed"
+ls -l /usr/bin/tree || echo "/usr/bin/tree file is gone"
+```
+
+Смысл цикла:
+
+```text
+1. посмотреть информацию о пакете
+2. проверить, установлен ли он
+3. установить пакет
+4. проверить, что команда появилась
+5. использовать команду
+6. удалить пакет
+7. проверить, что команда исчезла
+```
+
+---
+
+### Pipe: символ |
+
+Команда:
+
+```bash
+apt list --installed | head -n 20
+```
+
+Символ `|` называется pipe.
+
+Он передаёт вывод команды слева на вход команде справа.
+
+Схема:
+
+```text
+команда 1 → вывод → команда 2
+```
+
+Пример:
+
+```bash
+apt list --installed | head -n 20
+```
+
+означает:
+
+```text
+получить список установленных пакетов
+и показать только первые 20 строк
+```
+
+---
+
+### head
+
+Команда:
+
+```bash
+head -n 20
+```
+
+означает:
+
+```text
+показать первые 20 строк
+```
+
+Важно:
+
+```text
+head считает строки, а не пакеты
+```
+
+У `apt list --installed` первая строка часто служебная:
+
+```text
+Listing... Done
+```
+
+Поэтому:
+
+```bash
+apt list --installed | head -n 20
+```
+
+может показать:
+
+```text
+1 строка Listing... Done
+19 строк пакетов
+```
+
+Чтобы увидеть 20 пакетов, можно взять 21 строку:
+
+```bash
+apt list --installed | head -n 21
+```
+
+Или убрать первую служебную строку:
+
+```bash
+apt list --installed | tail -n +2 | head -n 20
+```
+
+Разбор:
+
+```text
+tail -n +2 = начать вывод со второй строки
+head -n 20 = показать первые 20 строк после этого
+```
+
+---
+
+### grep
+
+Команда:
+
+```bash
+apt list --installed | grep openssh
+```
+
+означает:
+
+```text
+взять полный список установленных пакетов
+и оставить только строки, где есть openssh
+```
+
+Важно:
+
+```text
+grep ищет по всему выводу,
+если перед ним не было head
+```
+
+Разница:
+
+```bash
+apt list --installed | head -n 20 | grep openssh
+```
+
+означает:
+
+```text
+сначала взять первые 20 строк,
+потом искать openssh только среди них
+```
+
+А команда:
+
+```bash
+apt list --installed | grep openssh | head -n 20
+```
+
+означает:
+
+```text
+сначала найти openssh во всём списке,
+потом показать первые 20 совпадений
+```
+
+Порядок команд в pipe важен.
+
+---
+
+### Оператор ||
+
+Команда:
+
+```bash
+apt list --installed | grep tree || echo "tree package is not installed"
+```
+
+`||` означает:
+
+```text
+если команда слева завершилась неуспешно,
+выполнить команду справа
+```
+
+В этом примере:
+
+```text
+если grep tree ничего не нашёл,
+вывести сообщение tree package is not installed
+```
+
+`echo` просто печатает текст в терминал.
+
+---
+
+### apt list --installed
+
+Команда:
+
+```bash
+apt list --installed
+```
+
+показывает установленные пакеты.
+
+Чтобы не выводить огромный список:
+
+```bash
+apt list --installed | head -n 20
+```
+
+Чтобы найти конкретный пакет:
+
+```bash
+apt list --installed | grep bash
+apt list --installed | grep openssh
+apt list --installed | grep tree || echo "tree package is not installed"
+```
+
+Примеры выводов:
+
+```text
+bash/noble,now 5.2.21-2ubuntu4 amd64 [installed]
+bash-completion/noble,now 1:2.11-8 all [installed,automatic]
+```
+
+Смысл:
+
+```text
+[installed] = пакет установлен
+[installed,automatic] = пакет установлен автоматически, обычно как зависимость
+```
+
+---
+
+### OpenSSH-пакеты
+
+Команда:
+
+```bash
+apt list --installed | grep openssh
+```
+
+показала:
+
+```text
+openssh-client/... [installed,automatic]
+openssh-server/... [installed]
+openssh-sftp-server/... [installed,automatic]
+```
+
+Смысл:
+
+```text
+openssh-client = SSH-клиент
+openssh-server = SSH-сервер
+openssh-sftp-server = SFTP через SSH
+```
+
+Для нашей Ubuntu VM особенно важен:
+
+```text
+openssh-server
+```
+
+Потому что именно он позволяет подключаться к Ubuntu с Windows по SSH:
+
+```bash
+ssh germanix@192.168.56.101
+```
+
+Схема:
+
+```text
+Windows PowerShell
+        |
+        | ssh germanix@192.168.56.101
+        v
+Ubuntu Server принимает подключение через openssh-server
+```
+
+---
+
+### apt list --upgradable
+
+Команда:
+
+```bash
+apt list --upgradable
+```
+
+показывает пакеты, для которых доступны обновления.
+
+Пример:
+
+```text
+base-files/noble-updates ... [upgradable from: ...]
+```
+
+Смысл:
+
+```text
+пакет установлен,
+но в репозитории доступна более новая версия
+```
+
+Важно:
+
+```text
+apt list --upgradable ничего не обновляет.
+Она только показывает список.
+```
+
+---
+
+### apt upgrade --simulate
+
+Команда:
+
+```bash
+apt upgrade --simulate
+```
+
+показывает, что сделал бы `apt upgrade`, но без реального изменения системы.
+
+Смысл:
+
+```text
+безопасно посмотреть план обновления
+```
+
+В выводе можно увидеть:
+
+```text
+The following packages will be upgraded:
+...
+```
+
+Важно:
+
+```text
+--simulate = сухой прогон
+система реально не меняется
+```
+
+DevOps-логика:
+
+```text
+сначала смотрю последствия,
+потом принимаю решение
+```
+
+---
+
+### dpkg
+
+`dpkg` — низкоуровневый инструмент для работы с Debian-пакетами.
+
+Главная разница:
+
+```text
+apt = высокий уровень, удобный менеджер пакетов
+dpkg = нижний уровень, база и управление .deb-пакетами
+```
+
+Обычно:
+
+```text
+для обычной установки и удаления использую apt
+для проверки состояния пакета на низком уровне использую dpkg
+```
+
+---
+
+### dpkg -l
+
+Команда:
+
+```bash
+dpkg -l
+```
+
+показывает список пакетов из базы `dpkg`.
+
+Чтобы ограничить вывод:
+
+```bash
+dpkg -l | head -n 20
+```
+
+Чтобы найти пакет:
+
+```bash
+dpkg -l | grep bash
+dpkg -l | grep openssh
+dpkg -l | grep tree || echo "tree package is not installed in dpkg"
+```
+
+В выводе строки могут начинаться с:
+
+```text
+ii
+```
+
+Для нашего уровня:
+
+```text
+ii = пакет установлен нормально
+```
+
+Более точно:
+
+```text
+первая i = пакет выбран для установки
+вторая i = пакет установлен
+```
+
+---
+
+### apt vs dpkg
+
+Короткая формула:
+
+```text
+apt = работаю с пакетами
+dpkg = проверяю/чиню пакетную базу и работаю с .deb напрямую
+```
+
+Использую `apt`, когда нужно:
+
+```text
+найти пакет
+посмотреть информацию о пакете
+установить пакет
+удалить пакет
+обновить список пакетов
+посмотреть доступные обновления
+посмотреть план upgrade
+```
+
+Команды:
+
+```bash
+apt search nginx
+apt show nginx
+sudo apt install nginx
+sudo apt remove nginx
+sudo apt update
+apt list --upgradable
+apt upgrade --simulate
+```
+
+Использую `dpkg`, когда нужно:
+
+```text
+проверить состояние пакета на низком уровне
+посмотреть статус конкретного пакета
+установить локальный .deb файл
+```
+
+Команды:
+
+```bash
+dpkg -l | grep nginx
+dpkg -s nginx
+sudo dpkg -i package.deb
+```
+
+Главная мысль:
+
+```text
+для обычной работы — apt
+для диагностики и низкого уровня — dpkg
+```
+
+---
+
+### Команды блока
+
+```bash
+sudo apt update
+
+apt search tree
+apt show tree
+
+command -v tree || echo "tree is not installed"
+
+sudo apt install -y tree
+
+command -v tree
+tree --version
+tree ~/linux-lab -L 2
+
+sudo apt remove -y tree
+
+hash -r
+command -v tree || echo "tree is not installed"
+ls -l /usr/bin/tree || echo "/usr/bin/tree file is gone"
+
+apt list --installed | head -n 20
+apt list --installed | grep bash
+apt list --installed | grep openssh
+apt list --installed | grep tree || echo "tree package is not installed"
+
+apt list --upgradable | head -n 20
+apt upgrade --simulate | head -n 40
+
+dpkg -l | head -n 20
+dpkg -l | grep bash
+dpkg -l | grep openssh
+dpkg -l | grep tree || echo "tree package is not installed in dpkg"
+```
+
+---
+
+### Что нужно уметь объяснить
+
+1. Что делает `sudo apt update`
+2. Чем `apt update` отличается от `apt upgrade`
+3. Что делает `apt show tree`
+4. Что делает `command -v tree`
+5. Что такое команда в Linux
+6. Что означает `||`
+7. Что делает `sudo apt install -y tree`
+8. Что делает `sudo apt remove -y tree`
+9. Зачем нужен `hash -r`
+10. Что делает `apt list --installed | grep openssh`
+11. Почему `openssh` мог не попасть в первые 20 строк, но нашёлся через `grep`
+12. Что значит `[installed]`
+13. Что значит `[installed,automatic]`
+14. Что делает `apt list --upgradable`
+15. Что делает `apt upgrade --simulate`
+16. Чем отличается `apt` от `dpkg`
+17. Что значит `ii` в `dpkg -l`
+
+---
+
+### Главный вывод
+
+`apt` нужен для обычной работы с пакетами:
+
+```text
+найти → посмотреть → установить → проверить → удалить → проверить
+```
+
+`dpkg` нужен для низкоуровневой проверки состояния пакетов.
+
+При работе с пакетами важно не просто запускать команды, а понимать процесс:
+
+```text
+1. Что я хочу установить?
+2. Есть ли такой пакет?
+3. Что это за пакет?
+4. Установлен ли он уже?
+5. Появилась ли команда после установки?
+6. Работает ли команда?
+7. Удалился ли пакет после remove?
+8. Не держит ли Bash старый путь в кеше?
+```
