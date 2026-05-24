@@ -4497,3 +4497,643 @@ disable    = отключить автозапуск
 если сервис не работает,
 сначала выполняю systemctl status service
 ```
+
+## 18) Linux 2.7: journalctl и диагностика логов сервисов
+
+### Цель блока
+
+Научиться читать логи сервисов через `journalctl` и использовать их для диагностики.
+
+Главная связка:
+
+```text
+systemctl status service
+показывает состояние сервиса сейчас
+
+journalctl -u service
+показывает логи сервиса
+```
+
+Если сервис не работает, правильный путь диагностики:
+
+```text
+1. systemctl status service
+2. journalctl -u service
+3. найти ошибку
+4. исправить причину
+5. проверить конфиг, если это сервис с конфигом
+6. restart/start service
+7. снова проверить status и logs
+```
+
+---
+
+### Что такое journalctl
+
+`journalctl` — команда для просмотра журнала systemd.
+
+Журнал содержит записи о:
+
+```text
+запуске сервисов
+остановке сервисов
+ошибках сервисов
+SSH-подключениях
+системных событиях
+загрузке системы
+работе systemd units
+```
+
+Коротко:
+
+```text
+journalctl = читать системные логи systemd
+```
+
+---
+
+### systemctl vs journalctl
+
+`systemctl` и `journalctl` решают разные задачи.
+
+```text
+systemctl status service
+отвечает на вопрос:
+что с сервисом сейчас?
+
+journalctl -u service
+отвечает на вопрос:
+что происходило с сервисом в логах?
+```
+
+Пример:
+
+```bash
+systemctl status nginx --no-pager
+journalctl -u nginx -n 20 --no-pager
+```
+
+Смысл:
+
+```text
+сначала смотрю состояние сервиса,
+потом смотрю последние записи лога этого сервиса
+```
+
+---
+
+### Базовая команда journalctl для сервиса
+
+Команда:
+
+```bash
+journalctl -u nginx --no-pager
+```
+
+Разбор:
+
+```text
+journalctl = открыть журнал systemd
+-u nginx = показать записи только по unit/service nginx
+--no-pager = вывести сразу в терминал, без less/pager
+```
+
+Важно:
+
+```text
+-u nginx — это фильтр по сервису/unit.
+Это не “логи nginx” само по себе, а указание journalctl:
+покажи только записи, связанные с nginx.
+```
+
+Для SSH:
+
+```bash
+journalctl -u ssh --no-pager
+```
+
+Для nginx:
+
+```bash
+journalctl -u nginx --no-pager
+```
+
+---
+
+### Ограничение количества строк: -n
+
+Команда:
+
+```bash
+journalctl -u nginx -n 20 --no-pager
+```
+
+означает:
+
+```text
+показать последние 20 строк логов nginx
+```
+
+Разбор:
+
+```text
+-u nginx = только unit/service nginx
+-n 20 = последние 20 записей
+--no-pager = без просмотрщика
+```
+
+Важно:
+
+```text
+-n 20 показывает последние 20 строк,
+а не первые.
+```
+
+Это удобно, потому что в логах обычно самые свежие события находятся в конце.
+
+---
+
+### Логи текущей загрузки: -b
+
+Команда:
+
+```bash
+journalctl -u nginx -b --no-pager
+```
+
+означает:
+
+```text
+показать логи nginx за текущую загрузку системы
+```
+
+Разбор:
+
+```text
+-u nginx = только nginx
+-b = текущая загрузка системы
+--no-pager = без просмотрщика
+```
+
+Чтобы не выводить слишком много строк:
+
+```bash
+journalctl -u nginx -b --no-pager | tail -n 20
+```
+
+Разбор:
+
+```text
+journalctl -u nginx -b --no-pager = все логи nginx за текущую загрузку
+| tail -n 20 = показать последние 20 строк
+```
+
+---
+
+### Логи по времени: --since
+
+Команда:
+
+```bash
+journalctl -u nginx --since "1 hour ago" --no-pager
+```
+
+означает:
+
+```text
+показать логи nginx за последний час
+```
+
+Если вывод:
+
+```text
+-- No entries --
+```
+
+это значит:
+
+```text
+за выбранный период записей нет
+```
+
+Это не ошибка. Просто за указанный период сервис не писал новых записей в журнал.
+
+---
+
+### Логи в реальном времени: -f
+
+Команда:
+
+```bash
+journalctl -u nginx -f --no-pager
+```
+
+означает:
+
+```text
+следить за логами nginx в реальном времени
+```
+
+Разбор:
+
+```text
+-u nginx = только unit/service nginx
+-f = follow, ждать новые записи и сразу показывать их
+--no-pager = без просмотрщика
+```
+
+Важно:
+
+```text
+journalctl -f не завершается сам.
+Он ждёт новые записи.
+```
+
+Выход:
+
+```text
+Ctrl+C
+```
+
+---
+
+### Почему для -f нужны две SSH-сессии
+
+Если в одном окне запустить:
+
+```bash
+journalctl -u nginx -f --no-pager
+```
+
+это окно будет занято просмотром логов.
+
+В этом же окне не нужно вводить обычные shell-команды, пока работает `-f`.
+
+Правильная схема:
+
+```text
+1 окно:
+journalctl -u nginx -f --no-pager
+
+2 окно:
+sudo systemctl restart nginx
+systemctl is-active nginx
+
+1 окно:
+видим новые строки логов
+
+выход из -f:
+Ctrl+C
+```
+
+После перезапуска nginx в первом окне появляются новые записи:
+
+```text
+Stopping nginx.service
+nginx.service: Deactivated successfully.
+Stopped nginx.service
+Starting nginx.service
+Started nginx.service
+```
+
+Главная мысль:
+
+```text
+journalctl -f позволяет наблюдать событие в моменте
+```
+
+---
+
+### SSH-логи
+
+Команда:
+
+```bash
+journalctl -u ssh -n 20 --no-pager
+```
+
+показывает последние SSH-события.
+
+Пример строки:
+
+```text
+Accepted password for germanix from 192.168.56.1 port 58106 ssh2
+```
+
+Смысл:
+
+```text
+пользователь germanix успешно вошёл по SSH
+с адреса 192.168.56.1
+```
+
+В нашей лаборатории:
+
+```text
+192.168.56.1 = Windows Host-Only adapter
+192.168.56.101 = Ubuntu Server
+```
+
+Схема:
+
+```text
+Windows PowerShell
+192.168.56.1
+        |
+        | ssh germanix@192.168.56.101
+        v
+Ubuntu Server
+192.168.56.101
+```
+
+Строка:
+
+```text
+pam_unix(sshd:session): session opened for user germanix
+```
+
+означает:
+
+```text
+для пользователя germanix открыта SSH-сессия
+```
+
+---
+
+### Nginx-логи
+
+Команда:
+
+```bash
+journalctl -u nginx -n 20 --no-pager
+```
+
+показывает последние события nginx.
+
+Типовые строки:
+
+```text
+Starting nginx.service
+Started nginx.service
+Stopping nginx.service
+Stopped nginx.service
+nginx.service: Deactivated successfully.
+```
+
+Смысл:
+
+```text
+Starting = systemd начал запуск nginx
+Started = nginx успешно запущен
+Stopping = systemd начал остановку nginx
+Stopped = nginx остановлен
+Deactivated successfully = nginx успешно деактивирован
+```
+
+Связка:
+
+```text
+sudo systemctl restart nginx
+        ↓
+journalctl -u nginx показывает:
+Stopping → Stopped → Starting → Started
+```
+
+---
+
+### Диагностика ошибки nginx
+
+Был создан специально неправильный конфиг:
+
+```bash
+sudo tee /etc/nginx/conf.d/broken-lab.conf > /dev/null <<'EOF'
+server {
+    listen 8080
+    server_name broken.local;
+}
+EOF
+```
+
+Ошибка:
+
+```text
+listen 8080
+```
+
+В nginx-конфиге после директивы нужна точка с запятой:
+
+```text
+listen 8080;
+```
+
+Проверка конфига:
+
+```bash
+sudo nginx -t
+```
+
+Ожидаемо при ошибке nginx сообщает, что конфигурация неправильная.
+
+---
+
+### Почему сначала nginx -t, а потом restart
+
+Правильная привычка:
+
+```text
+сначала проверить конфиг,
+потом перезапускать сервис
+```
+
+Команда:
+
+```bash
+sudo nginx -t
+```
+
+проверяет конфигурацию nginx.
+
+Если конфиг исправен:
+
+```text
+syntax is ok
+test is successful
+```
+
+Если конфиг сломан, `nginx -t` покажет ошибку и проблемный файл.
+
+---
+
+### Что делать, если nginx не стартует
+
+Правильная цепочка:
+
+```bash
+systemctl status nginx --no-pager
+journalctl -u nginx -n 30 --no-pager
+sudo nginx -t
+```
+
+Дальше:
+
+```text
+1. найти ошибку
+2. исправить или удалить плохой конфиг
+3. снова проверить nginx -t
+4. перезапустить сервис nginx
+5. проверить статус
+6. проверить последние логи
+```
+
+В нашей практике плохой файл удалялся так:
+
+```bash
+sudo rm /etc/nginx/conf.d/broken-lab.conf
+```
+
+Проверка:
+
+```bash
+sudo nginx -t
+```
+
+Если всё нормально:
+
+```bash
+sudo systemctl restart nginx
+systemctl status nginx --no-pager
+journalctl -u nginx -n 20 --no-pager
+```
+
+---
+
+### Важный вывод из практики
+
+Если сервис уже в состоянии `failed`, недостаточно просто исправить файл.
+
+Нужно после исправления снова запустить или перезапустить сервис:
+
+```bash
+sudo systemctl restart nginx
+```
+
+или:
+
+```bash
+sudo systemctl start nginx
+```
+
+Коротко:
+
+```text
+исправить причину мало
+нужно заново стартовать сервис
+```
+
+---
+
+### Полная диагностическая схема service failed
+
+```text
+1. Проверить статус:
+   systemctl status service --no-pager
+
+2. Посмотреть последние логи:
+   journalctl -u service -n 30 --no-pager
+
+3. Если сервис с конфигом — проверить конфиг:
+   nginx -t
+   или аналогичную команду проверки для другого сервиса
+
+4. Исправить причину:
+   файл
+   права
+   порт
+   синтаксис
+   зависимость
+
+5. Перезапустить сервис:
+   sudo systemctl restart service
+
+6. Проверить состояние:
+   systemctl is-active service
+   systemctl status service --no-pager
+
+7. Снова посмотреть последние логи:
+   journalctl -u service -n 20 --no-pager
+```
+
+---
+
+### Команды блока
+
+```bash
+whoami
+hostname
+
+journalctl --version
+
+journalctl -u ssh -n 20 --no-pager
+journalctl -u nginx -n 20 --no-pager
+journalctl -u nginx -b --no-pager | tail -n 20
+journalctl -u nginx --since "1 hour ago" --no-pager
+
+journalctl -u nginx -f --no-pager
+
+sudo systemctl restart nginx
+systemctl is-active nginx
+
+systemctl status nginx --no-pager
+journalctl -u nginx -n 30 --no-pager
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+---
+
+### Что нужно уметь объяснить
+
+1. Что делает `journalctl -u nginx --no-pager`
+2. Что означает `-u nginx`
+3. Что делает `journalctl -u nginx -n 20 --no-pager`
+4. Что означает `-n 20`
+5. Что делает `journalctl -u nginx -b --no-pager`
+6. Что означает `-b`
+7. Что делает `journalctl -u nginx --since "1 hour ago" --no-pager`
+8. Что означает `-- No entries --`
+9. Что делает `journalctl -u nginx -f --no-pager`
+10. Что означает `-f`
+11. Как выйти из режима `journalctl -f`
+12. Почему для `journalctl -f` удобно открыть две SSH-сессии
+13. Что означает `Accepted password for germanix from 192.168.56.1`
+14. Что означает `Started nginx.service`
+15. Какая правильная цепочка диагностики, если nginx не стартует после изменения конфига
+
+---
+
+### Главный вывод
+
+`journalctl` — основной инструмент чтения логов systemd-сервисов.
+
+Главная рабочая связка:
+
+```text
+systemctl status service
+journalctl -u service -n 30 --no-pager
+```
+
+Для nginx после изменения конфига:
+
+```text
+sudo nginx -t
+sudo systemctl restart nginx
+systemctl status nginx --no-pager
+journalctl -u nginx -n 20 --no-pager
+```
+
+Главная диагностическая мысль:
+
+```text
+status показывает состояние,
+journalctl показывает историю и причину.
+```
