@@ -3795,3 +3795,705 @@ dpkg -l | grep tree || echo "tree package is not installed in dpkg"
 7. Удалился ли пакет после remove?
 8. Не держит ли Bash старый путь в кеше?
 ```
+
+## 17) Linux 2.6: systemctl, сервисы и автозапуск
+
+### Цель блока
+
+Научиться работать с сервисами Linux через `systemctl`:
+
+```text
+посмотреть статус сервиса
+понять, работает ли сервис сейчас
+запустить сервис
+остановить сервис
+перезапустить сервис
+проверить автозапуск
+включить автозапуск
+отключить автозапуск
+отличать active от enabled
+```
+
+Это важно для DevOps, потому что серверные приложения обычно работают как фоновые сервисы:
+
+```text
+ssh — принимает SSH-подключения
+nginx — веб-сервер / reverse proxy
+docker — Docker daemon
+postgresql — база данных
+gitlab-runner — выполняет GitLab CI/CD jobs
+```
+
+Если сервис “не работает”, один из первых шагов диагностики:
+
+```bash
+systemctl status service
+```
+
+---
+
+### Что такое сервис
+
+Сервис — это программа, которая работает в фоне.
+
+Пользователь не запускает её вручную каждый раз в терминале. Обычно сервис запускается системой и продолжает работать самостоятельно.
+
+Примеры:
+
+```text
+ssh.service
+nginx.service
+docker.service
+cron.service
+systemd-journald.service
+```
+
+Коротко:
+
+```text
+сервис = фоновая программа, которой управляет systemd
+```
+
+---
+
+### systemctl
+
+`systemctl` — команда для управления systemd и его unit-ами.
+
+В нашем блоке нас интересуют service units, то есть сервисы.
+
+Главные команды:
+
+```bash
+systemctl status service
+systemctl is-active service
+systemctl is-enabled service
+
+sudo systemctl start service
+sudo systemctl stop service
+sudo systemctl restart service
+
+sudo systemctl enable service
+sudo systemctl disable service
+```
+
+---
+
+### Почему используется sudo
+
+Просмотр статуса обычно можно делать без `sudo`:
+
+```bash
+systemctl status nginx
+systemctl is-active nginx
+systemctl is-enabled nginx
+```
+
+Но управление системным сервисом требует повышенных прав:
+
+```bash
+sudo systemctl start nginx
+sudo systemctl stop nginx
+sudo systemctl restart nginx
+sudo systemctl enable nginx
+sudo systemctl disable nginx
+```
+
+Причина:
+
+```text
+старт, остановка и автозапуск системных сервисов влияют на работу всей системы
+```
+
+---
+
+### systemctl status
+
+Команда:
+
+```bash
+systemctl status ssh --no-pager
+```
+
+или:
+
+```bash
+systemctl status nginx --no-pager
+```
+
+показывает подробное состояние сервиса.
+
+Важные строки:
+
+```text
+Loaded:
+Active:
+Main PID:
+Tasks:
+Memory:
+CGroup:
+```
+
+Самая важная строка:
+
+```text
+Active:
+```
+
+Пример:
+
+```text
+Active: active (running)
+```
+
+означает:
+
+```text
+сервис сейчас запущен и работает
+```
+
+Пример:
+
+```text
+Active: inactive (dead)
+```
+
+означает:
+
+```text
+сервис сейчас остановлен
+```
+
+---
+
+### --no-pager
+
+Команда:
+
+```bash
+systemctl status nginx
+```
+
+может открыть вывод через pager, например `less`.
+
+Pager — это просмотрщик длинного вывода.
+
+В pager выход:
+
+```text
+q
+```
+
+Команда:
+
+```bash
+systemctl status nginx --no-pager
+```
+
+означает:
+
+```text
+не открывать pager, вывести результат сразу в терминал
+```
+
+Если вывод короткий, разницы можно не заметить.
+
+Но в обучении удобно использовать `--no-pager`, чтобы не застрять в просмотрщике.
+
+---
+
+### Проверка SSH-сервиса
+
+Подключение к Ubuntu выполняется с Windows:
+
+```powershell
+ssh germanix@192.168.56.101
+```
+
+На Ubuntu это подключение принимает сервис:
+
+```text
+ssh.service
+```
+
+Проверка:
+
+```bash
+systemctl status ssh --no-pager
+systemctl is-active ssh
+systemctl is-enabled ssh
+```
+
+Если:
+
+```text
+Active: active (running)
+```
+
+значит SSH-сервис работает сейчас.
+
+Если:
+
+```text
+enabled
+```
+
+значит SSH включён в автозапуск при старте системы.
+
+Схема:
+
+```text
+Windows PowerShell
+        |
+        | ssh germanix@192.168.56.101
+        v
+Ubuntu Server
+        |
+        v
+ssh.service принимает подключение
+```
+
+---
+
+### Почему не тренировать stop на SSH
+
+Если выполнить:
+
+```bash
+sudo systemctl stop ssh
+```
+
+то остановится сервис, который принимает SSH-подключения.
+
+Возможные последствия:
+
+```text
+новые SSH-подключения не будут приниматься
+текущая SSH-сессия может оборваться
+можно потерять удалённый доступ к серверу
+```
+
+Это не ломает сервер навсегда, но может выбить из SSH.
+
+Восстановление через VirtualBox-консоль:
+
+```bash
+sudo systemctl start ssh
+systemctl status ssh --no-pager
+```
+
+Поэтому для тренировки безопаснее использовать `nginx`.
+
+---
+
+### Управление сервисом nginx
+
+Проверка состояния:
+
+```bash
+systemctl status nginx --no-pager
+systemctl is-active nginx
+systemctl is-enabled nginx
+```
+
+Остановить сервис:
+
+```bash
+sudo systemctl stop nginx
+```
+
+Проверить:
+
+```bash
+systemctl is-active nginx
+systemctl status nginx --no-pager
+```
+
+Ожидаемо после остановки:
+
+```text
+inactive
+Active: inactive (dead)
+```
+
+Запустить сервис:
+
+```bash
+sudo systemctl start nginx
+```
+
+Проверить:
+
+```bash
+systemctl is-active nginx
+systemctl status nginx --no-pager
+```
+
+Ожидаемо:
+
+```text
+active
+Active: active (running)
+```
+
+Перезапустить сервис:
+
+```bash
+sudo systemctl restart nginx
+```
+
+Проверить:
+
+```bash
+systemctl is-active nginx
+systemctl status nginx --no-pager
+```
+
+---
+
+### start, stop, restart
+
+Коротко:
+
+```text
+start   = запустить сервис сейчас
+stop    = остановить сервис сейчас
+restart = остановить и сразу запустить заново
+```
+
+Примеры:
+
+```bash
+sudo systemctl start nginx
+sudo systemctl stop nginx
+sudo systemctl restart nginx
+```
+
+`restart` часто используется после изменения конфигурации сервиса.
+
+Например:
+
+```text
+изменили nginx-конфиг
+проверили конфиг
+перезапустили nginx
+проверили статус
+```
+
+---
+
+### is-active
+
+Команда:
+
+```bash
+systemctl is-active nginx
+```
+
+проверяет, работает ли сервис прямо сейчас.
+
+Возможные результаты:
+
+```text
+active
+inactive
+failed
+unknown
+```
+
+Для нашего базового уровня:
+
+```text
+active = работает сейчас
+inactive = не работает сейчас
+failed = сервис упал или не смог стартовать
+```
+
+---
+
+### is-enabled
+
+Команда:
+
+```bash
+systemctl is-enabled nginx
+```
+
+проверяет, включён ли автозапуск сервиса при старте системы.
+
+Возможные результаты:
+
+```text
+enabled
+disabled
+static
+```
+
+Для нашего базового уровня:
+
+```text
+enabled = включён в автозапуск
+disabled = не включён в автозапуск
+static = нельзя включить напрямую обычным enable или нет секции Install
+```
+
+---
+
+### active vs enabled
+
+Это главный смысл блока.
+
+Есть два разных вопроса:
+
+```text
+1. Работает ли сервис прямо сейчас?
+2. Запустится ли сервис после перезагрузки?
+```
+
+Для первого:
+
+```bash
+systemctl is-active nginx
+```
+
+Для второго:
+
+```bash
+systemctl is-enabled nginx
+```
+
+Таблица:
+
+```text
+active + enabled
+сервис работает сейчас и включён в автозапуск
+
+active + disabled
+сервис работает сейчас, но после перезагрузки сам не стартует
+
+inactive + enabled
+сервис сейчас остановлен, но после перезагрузки стартует
+
+inactive + disabled
+сервис сейчас остановлен и в автозапуск не включён
+```
+
+Коротко:
+
+```text
+active/inactive = состояние сейчас
+enabled/disabled = автозапуск
+```
+
+---
+
+### enable и disable
+
+Команда:
+
+```bash
+sudo systemctl disable nginx
+```
+
+отключает автозапуск.
+
+Важно:
+
+```text
+disable не обязан останавливать сервис прямо сейчас
+```
+
+Практический пример:
+
+```bash
+sudo systemctl disable nginx
+systemctl is-enabled nginx
+systemctl is-active nginx
+```
+
+Результат:
+
+```text
+disabled
+active
+```
+
+Это значит:
+
+```text
+nginx работает сейчас,
+но после перезагрузки сам не запустится
+```
+
+Команда:
+
+```bash
+sudo systemctl enable nginx
+```
+
+включает автозапуск.
+
+Проверка:
+
+```bash
+systemctl is-enabled nginx
+systemctl is-active nginx
+```
+
+Результат:
+
+```text
+enabled
+active
+```
+
+Это значит:
+
+```text
+nginx работает сейчас
+и включён в автозапуск
+```
+
+---
+
+### Типовая ошибка: опечатка в systemctl
+
+Была ошибка:
+
+```bash
+sudo sytemctl restart nginx
+```
+
+Система ответила:
+
+```text
+Command 'sytemctl' not found, did you mean: systemctl
+```
+
+Правильно:
+
+```bash
+sudo systemctl restart nginx
+```
+
+Вывод:
+
+```text
+если команда не найдена,
+сначала проверить написание команды
+```
+
+---
+
+### Просмотр работающих сервисов
+
+Команда:
+
+```bash
+systemctl list-units --type=service --state=running --no-pager | head -n 20
+```
+
+Разбор:
+
+```text
+systemctl list-units = показать units
+--type=service = только сервисы
+--state=running = только работающие
+--no-pager = не открывать pager
+| head -n 20 = показать первые 20 строк
+```
+
+Смысл:
+
+```text
+быстро посмотреть, какие сервисы сейчас работают
+```
+
+---
+
+### Команды блока
+
+```bash
+whoami
+hostname
+
+systemctl --version
+
+systemctl status ssh --no-pager
+systemctl is-active ssh
+systemctl is-enabled ssh
+
+systemctl list-units --type=service --state=running --no-pager | head -n 20
+
+systemctl status nginx --no-pager
+systemctl is-active nginx
+systemctl is-enabled nginx
+
+sudo systemctl stop nginx
+systemctl is-active nginx
+systemctl status nginx --no-pager
+
+sudo systemctl start nginx
+systemctl is-active nginx
+systemctl status nginx --no-pager
+
+sudo systemctl restart nginx
+systemctl is-active nginx
+systemctl status nginx --no-pager
+
+sudo systemctl disable nginx
+systemctl is-enabled nginx
+systemctl is-active nginx
+
+sudo systemctl enable nginx
+systemctl is-enabled nginx
+systemctl is-active nginx
+```
+
+---
+
+### Что нужно уметь объяснить
+
+1. Что такое сервис в Linux
+2. Что делает `systemctl status nginx --no-pager`
+3. Что означает `Active: active (running)`
+4. Что означает `Active: inactive (dead)`
+5. Что делает `systemctl is-active nginx`
+6. Что делает `systemctl is-enabled nginx`
+7. Что делает `sudo systemctl stop nginx`
+8. Что делает `sudo systemctl start nginx`
+9. Что делает `sudo systemctl restart nginx`
+10. Что делает `sudo systemctl disable nginx`
+11. Что делает `sudo systemctl enable nginx`
+12. Может ли сервис быть active, но disabled
+13. Может ли сервис быть inactive, но enabled
+14. Почему не стоит тренировать stop на SSH
+15. Что первым делом проверять, если сервис не работает
+
+---
+
+### Главный вывод
+
+`systemctl` — основной инструмент управления сервисами.
+
+Главная схема:
+
+```text
+status     = подробное состояние
+is-active  = работает ли сейчас
+is-enabled = включён ли автозапуск
+
+start      = запустить сейчас
+stop       = остановить сейчас
+restart    = перезапустить сейчас
+
+enable     = включить автозапуск
+disable    = отключить автозапуск
+```
+
+Главная диагностическая мысль:
+
+```text
+если сервис не работает,
+сначала выполняю systemctl status service
+```
