@@ -6806,3 +6806,1886 @@ systemctl → pgrep → ss → curl
 Connection refused
 IP доступен, но на нужном порту нет процесса.
 ```
+
+## 21. Linux 2.10 — диагностика типовых проблем
+
+### Цель блока
+
+Научиться не просто выполнять отдельные команды, а разбирать типовые Linux-проблемы по рабочей диагностической логике.
+
+В этом блоке разобраны сценарии:
+
+- `command not found`;
+- `Permission denied`;
+- `service failed`;
+- `Address already in use`;
+- `Connection refused`;
+- DNS / network issue.
+
+Главная идея блока:
+
+```text
+Не угадывать.
+Не паниковать.
+Идти по слоям:
+симптом → проверка → причина → исправление → контроль.
+```
+
+---
+
+## 1. command not found
+
+### Что значит ошибка
+
+Ошибка:
+
+```text
+command not found
+```
+
+означает:
+
+```text
+shell не смог найти команду, которую пользователь ввёл.
+```
+
+Типовые причины:
+
+```text
+1. Опечатка в имени команды.
+2. Команда не установлена.
+3. Команда установлена, но не находится в PATH.
+4. Пользователь думает, что такая команда есть, но её нет.
+```
+
+Пример ошибки:
+
+```bash
+ngnix -v
+```
+
+Вывод:
+
+```text
+Command 'ngnix' not found
+```
+
+Причина:
+
+```text
+ngnix — опечатка.
+Правильно: nginx.
+```
+
+---
+
+### Проверка команды через command -v
+
+Команда:
+
+```bash
+command -v nginx
+```
+
+Смысл:
+
+```text
+проверить, может ли shell найти команду nginx.
+```
+
+Если вывод:
+
+```text
+/usr/sbin/nginx
+```
+
+значит:
+
+```text
+команда nginx существует;
+bash знает, какой исполняемый файл запускать;
+путь к команде: /usr/sbin/nginx.
+```
+
+Если команда не найдена:
+
+```bash
+command -v ngnix || echo "ngnix not found"
+```
+
+Разбор:
+
+```text
+command -v ngnix
+попытаться найти команду ngnix.
+
+||
+если команда слева завершилась ошибкой,
+выполнить команду справа.
+
+echo "ngnix not found"
+вывести понятное сообщение.
+```
+
+---
+
+### Команда vs пакет
+
+Важно отличать команду от пакета.
+
+```bash
+command -v nginx
+```
+
+проверяет:
+
+```text
+могу ли я запустить команду nginx?
+```
+
+А команды:
+
+```bash
+dpkg -l | grep nginx
+apt list --installed | grep nginx
+```
+
+проверяют:
+
+```text
+установлен ли пакет nginx в системе?
+```
+
+Разница:
+
+```text
+command -v nginx
+= shell ищет исполняемую команду.
+
+dpkg/apt
+= система проверяет установленные пакеты.
+```
+
+---
+
+### Что такое пакет
+
+Пакет — это не просто один файл команды.
+
+Пакет — это комплект, который пакетный менеджер устанавливает и учитывает в системе.
+
+Упрощённо:
+
+```text
+Пакет =
+файлы программы
++ конфиги
++ зависимости
++ метаданные
++ systemd unit
++ установочные/удаляющие скрипты
++ документация
+```
+
+На примере nginx:
+
+```text
+/usr/sbin/nginx
+исполняемый файл nginx
+
+/etc/nginx/
+конфигурация nginx
+
+/var/log/nginx/
+логи nginx
+
+nginx.service
+systemd service-unit для nginx
+
+dpkg/apt database
+информация о том, что пакет установлен
+```
+
+То есть:
+
+```text
+команда nginx — это исполняемый файл;
+пакет nginx — это полный установленный комплект.
+```
+
+---
+
+### PATH
+
+`PATH` — это список каталогов, где shell ищет команды.
+
+Когда пользователь вводит:
+
+```bash
+nginx
+```
+
+bash не ищет команду по всему диску. Он смотрит в каталоги из переменной `PATH`.
+
+Проверить PATH:
+
+```bash
+echo $PATH
+```
+
+Пример смысла:
+
+```text
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+```
+
+Если исполняемый файл лежит в одном из каталогов PATH, shell может найти команду.
+
+Команда:
+
+```bash
+command -v nginx
+```
+
+показывает, какой путь shell нашёл для этой команды.
+
+---
+
+### PowerShell-аналогия
+
+В Linux/bash:
+
+```bash
+command -v NAME
+```
+
+В PowerShell:
+
+```powershell
+Get-Command NAME
+```
+
+PowerShell ищет команду среди:
+
+```text
+cmdlet
+alias
+function
+script
+application
+```
+
+Пример собственной команды в PowerShell:
+
+```powershell
+function lab {
+    Set-Location C:\ib-lab\ultrasilnye-devsecops
+    git status
+}
+```
+
+Проверка:
+
+```powershell
+Get-Command lab
+```
+
+Если функцию добавить в `$PROFILE`, она будет доступна после перезапуска PowerShell.
+
+Главная мысль:
+
+```text
+Команда — не магическое слово.
+
+Shell получает имя команды и пытается найти,
+что с этим именем связано:
+
+встроенная команда;
+alias;
+function;
+script;
+исполняемый файл в PATH.
+
+Если нашёл — запускает.
+Если не нашёл — command not found.
+```
+
+---
+
+### Диагностическая схема command not found
+
+Если появилась ошибка:
+
+```text
+command not found
+```
+
+идти так:
+
+```text
+1. Проверить опечатку.
+2. Выполнить command -v COMMAND.
+3. Проверить установленный пакет:
+   dpkg -l | grep PACKAGE
+   apt list --installed | grep PACKAGE
+4. Если пакет не установлен:
+   sudo apt update
+   sudo apt install PACKAGE
+5. Если пакет установлен, но команда не находится:
+   проверить PATH;
+   проверить имя команды;
+   проверить документацию пакета.
+```
+
+Пример:
+
+```bash
+ngnix -v
+command -v ngnix || echo "ngnix not found"
+command -v nginx
+nginx -v
+dpkg -l | grep nginx
+apt list --installed | grep nginx
+```
+
+Вывод:
+
+```text
+ngnix = опечатка;
+nginx = команда есть;
+пакет nginx установлен.
+```
+
+---
+
+## 2. Permission denied
+
+### Что значит ошибка
+
+Ошибка:
+
+```text
+Permission denied
+```
+
+означает:
+
+```text
+команда правильная,
+объект существует,
+но у пользователя нет нужного права на действие.
+```
+
+Типовые действия:
+
+```text
+читать файл;
+писать в файл;
+выполнять файл;
+входить в каталог;
+открывать системный порт;
+читать системный лог;
+изменять системный конфиг.
+```
+
+Типовые DevOps-ситуации:
+
+```text
+нельзя записать в конфиг;
+скрипт не запускается;
+nginx не может прочитать файл;
+контейнер не может писать в volume;
+GitLab Runner не может открыть файл;
+обычный пользователь пытается открыть порт 80.
+```
+
+---
+
+### Права Linux
+
+У файла есть три группы прав:
+
+```text
+owner  = владелец
+group  = группа
+others = остальные
+```
+
+Базовые права:
+
+```text
+r = read = 4
+w = write = 2
+x = execute = 1
+```
+
+Примеры:
+
+```text
+400 = r-------- = владелец может только читать
+600 = rw------- = владелец может читать и писать
+644 = rw-r--r-- = владелец читает/пишет, остальные читают
+755 = rwxr-xr-x = владелец всё, остальные читают/выполняют
+```
+
+---
+
+### Практический пример
+
+Создать рабочую папку:
+
+```bash
+mkdir -p ~/linux-lab/diagnostics
+cd ~/linux-lab/diagnostics
+pwd
+```
+
+Создать файл:
+
+```bash
+echo "secret config" > denied-demo.txt
+cat denied-demo.txt
+ls -l denied-demo.txt
+```
+
+Обычные права могут выглядеть так:
+
+```text
+-rw-rw-r-- 1 germanix germanix ... denied-demo.txt
+```
+
+Смысл:
+
+```text
+owner germanix может читать и писать;
+group germanix может читать и писать;
+others могут читать.
+```
+
+Запретить запись даже владельцу:
+
+```bash
+chmod 400 denied-demo.txt
+ls -l denied-demo.txt
+```
+
+Ожидаемо:
+
+```text
+-r-------- 1 germanix germanix ... denied-demo.txt
+```
+
+Теперь попытаться дописать строку:
+
+```bash
+echo "new line" >> denied-demo.txt
+```
+
+Ожидаемо:
+
+```text
+Permission denied
+```
+
+Почему:
+
+```text
+>> пытается дописать в файл;
+для записи нужно право w;
+у владельца права только r;
+write-права нет.
+```
+
+---
+
+### Диагностика Permission denied
+
+После ошибки не исправлять вслепую. Сначала проверить.
+
+```bash
+stat denied-demo.txt
+id
+```
+
+`stat` показывает подробную информацию о файле:
+
+```text
+права;
+владельца;
+группу;
+размер;
+inode;
+временные метки.
+```
+
+Пример важной строки:
+
+```text
+Access: (0400/-r--------)  Uid: (1000/germanix)  Gid: (1000/germanix)
+```
+
+Смысл:
+
+```text
+0400 = права файла;
+-r-------- = текстовая форма прав;
+Uid germanix = владелец;
+Gid germanix = группа.
+```
+
+Команда:
+
+```bash
+id
+```
+
+показывает:
+
+```text
+какой у меня UID;
+какая основная группа;
+в каких группах я состою.
+```
+
+---
+
+### Исправление
+
+Вернуть владельцу право записи:
+
+```bash
+chmod 600 denied-demo.txt
+ls -l denied-demo.txt
+```
+
+Ожидаемо:
+
+```text
+-rw------- 1 germanix germanix ... denied-demo.txt
+```
+
+Теперь запись сработает:
+
+```bash
+echo "new line" >> denied-demo.txt
+cat denied-demo.txt
+```
+
+Ожидаемо:
+
+```text
+secret config
+new line
+```
+
+---
+
+### Диагностическая схема Permission denied
+
+```text
+1. Что я пытаюсь сделать?
+   читать / писать / выполнить / войти в каталог / открыть порт
+
+2. Кто я?
+   id
+
+3. Кто владелец объекта?
+   ls -l file
+   stat file
+
+4. Какие права у owner/group/others?
+
+5. Есть ли нужное право?
+   r для чтения
+   w для записи
+   x для выполнения/входа в каталог
+
+6. Исправление:
+   chmod — изменить права
+   chown — изменить владельца
+   sudo — выполнить с повышенными правами, если это оправдано
+```
+
+Важно:
+
+```text
+sudo не надо использовать автоматически.
+Сначала понять причину.
+```
+
+---
+
+### Ключевой вывод
+
+```text
+Permission denied =
+нет прав на конкретное действие.
+
+В примере:
+файл принадлежал germanix,
+но chmod 400 убрал write-право.
+Поэтому >> не смог дописать строку.
+После chmod 600 запись снова заработала.
+```
+
+## 21. Linux 2.10 — диагностика типовых проблем
+
+### Цель блока
+
+Научиться не просто выполнять отдельные команды, а разбирать типовые Linux-проблемы по рабочей диагностической логике.
+
+В этом блоке разобраны сценарии:
+
+- `command not found`;
+- `Permission denied`;
+- `service failed`;
+- `Address already in use`;
+- `Connection refused`;
+- DNS / network issue.
+
+Главная идея блока:
+
+```text
+Не угадывать.
+Не паниковать.
+Идти по слоям:
+симптом → проверка → причина → исправление → контроль.
+```
+
+---
+
+## 1. command not found
+
+### Что значит ошибка
+
+Ошибка:
+
+```text
+command not found
+```
+
+означает:
+
+```text
+shell не смог найти команду, которую пользователь ввёл.
+```
+
+Типовые причины:
+
+```text
+1. Опечатка в имени команды.
+2. Команда не установлена.
+3. Команда установлена, но не находится в PATH.
+4. Пользователь думает, что такая команда есть, но её нет.
+```
+
+Пример ошибки:
+
+```bash
+ngnix -v
+```
+
+Вывод:
+
+```text
+Command 'ngnix' not found
+```
+
+Причина:
+
+```text
+ngnix — опечатка.
+Правильно: nginx.
+```
+
+---
+
+### Проверка команды через command -v
+
+Команда:
+
+```bash
+command -v nginx
+```
+
+Смысл:
+
+```text
+проверить, может ли shell найти команду nginx.
+```
+
+Если вывод:
+
+```text
+/usr/sbin/nginx
+```
+
+значит:
+
+```text
+команда nginx существует;
+bash знает, какой исполняемый файл запускать;
+путь к команде: /usr/sbin/nginx.
+```
+
+Если команда не найдена:
+
+```bash
+command -v ngnix || echo "ngnix not found"
+```
+
+Разбор:
+
+```text
+command -v ngnix
+попытаться найти команду ngnix.
+
+||
+если команда слева завершилась ошибкой,
+выполнить команду справа.
+
+echo "ngnix not found"
+вывести понятное сообщение.
+```
+
+---
+
+### Команда vs пакет
+
+Важно отличать команду от пакета.
+
+```bash
+command -v nginx
+```
+
+проверяет:
+
+```text
+могу ли я запустить команду nginx?
+```
+
+А команды:
+
+```bash
+dpkg -l | grep nginx
+apt list --installed | grep nginx
+```
+
+проверяют:
+
+```text
+установлен ли пакет nginx в системе?
+```
+
+Разница:
+
+```text
+command -v nginx
+= shell ищет исполняемую команду.
+
+dpkg/apt
+= система проверяет установленные пакеты.
+```
+
+---
+
+### Что такое пакет
+
+Пакет — это не просто один файл команды.
+
+Пакет — это комплект, который пакетный менеджер устанавливает и учитывает в системе.
+
+Упрощённо:
+
+```text
+Пакет =
+файлы программы
++ конфиги
++ зависимости
++ метаданные
++ systemd unit
++ установочные/удаляющие скрипты
++ документация
+```
+
+На примере nginx:
+
+```text
+/usr/sbin/nginx
+исполняемый файл nginx
+
+/etc/nginx/
+конфигурация nginx
+
+/var/log/nginx/
+логи nginx
+
+nginx.service
+systemd service-unit для nginx
+
+dpkg/apt database
+информация о том, что пакет установлен
+```
+
+То есть:
+
+```text
+команда nginx — это исполняемый файл;
+пакет nginx — это полный установленный комплект.
+```
+
+---
+
+### PATH
+
+`PATH` — это список каталогов, где shell ищет команды.
+
+Когда пользователь вводит:
+
+```bash
+nginx
+```
+
+bash не ищет команду по всему диску. Он смотрит в каталоги из переменной `PATH`.
+
+Проверить PATH:
+
+```bash
+echo $PATH
+```
+
+Пример смысла:
+
+```text
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+```
+
+Если исполняемый файл лежит в одном из каталогов PATH, shell может найти команду.
+
+Команда:
+
+```bash
+command -v nginx
+```
+
+показывает, какой путь shell нашёл для этой команды.
+
+---
+
+### PowerShell-аналогия
+
+В Linux/bash:
+
+```bash
+command -v NAME
+```
+
+В PowerShell:
+
+```powershell
+Get-Command NAME
+```
+
+PowerShell ищет команду среди:
+
+```text
+cmdlet
+alias
+function
+script
+application
+```
+
+Пример собственной команды в PowerShell:
+
+```powershell
+function lab {
+    Set-Location C:\ib-lab\ultrasilnye-devsecops
+    git status
+}
+```
+
+Проверка:
+
+```powershell
+Get-Command lab
+```
+
+Если функцию добавить в `$PROFILE`, она будет доступна после перезапуска PowerShell.
+
+Главная мысль:
+
+```text
+Команда — не магическое слово.
+
+Shell получает имя команды и пытается найти,
+что с этим именем связано:
+
+встроенная команда;
+alias;
+function;
+script;
+исполняемый файл в PATH.
+
+Если нашёл — запускает.
+Если не нашёл — command not found.
+```
+
+---
+
+### Диагностическая схема command not found
+
+Если появилась ошибка:
+
+```text
+command not found
+```
+
+идти так:
+
+```text
+1. Проверить опечатку.
+2. Выполнить command -v COMMAND.
+3. Проверить установленный пакет:
+   dpkg -l | grep PACKAGE
+   apt list --installed | grep PACKAGE
+4. Если пакет не установлен:
+   sudo apt update
+   sudo apt install PACKAGE
+5. Если пакет установлен, но команда не находится:
+   проверить PATH;
+   проверить имя команды;
+   проверить документацию пакета.
+```
+
+Пример:
+
+```bash
+ngnix -v
+command -v ngnix || echo "ngnix not found"
+command -v nginx
+nginx -v
+dpkg -l | grep nginx
+apt list --installed | grep nginx
+```
+
+Вывод:
+
+```text
+ngnix = опечатка;
+nginx = команда есть;
+пакет nginx установлен.
+```
+
+---
+
+## 2. Permission denied
+
+### Что значит ошибка
+
+Ошибка:
+
+```text
+Permission denied
+```
+
+означает:
+
+```text
+команда правильная,
+объект существует,
+но у пользователя нет нужного права на действие.
+```
+
+Типовые действия:
+
+```text
+читать файл;
+писать в файл;
+выполнять файл;
+входить в каталог;
+открывать системный порт;
+читать системный лог;
+изменять системный конфиг.
+```
+
+Типовые DevOps-ситуации:
+
+```text
+нельзя записать в конфиг;
+скрипт не запускается;
+nginx не может прочитать файл;
+контейнер не может писать в volume;
+GitLab Runner не может открыть файл;
+обычный пользователь пытается открыть порт 80.
+```
+
+---
+
+### Права Linux
+
+У файла есть три группы прав:
+
+```text
+owner  = владелец
+group  = группа
+others = остальные
+```
+
+Базовые права:
+
+```text
+r = read = 4
+w = write = 2
+x = execute = 1
+```
+
+Примеры:
+
+```text
+400 = r-------- = владелец может только читать
+600 = rw------- = владелец может читать и писать
+644 = rw-r--r-- = владелец читает/пишет, остальные читают
+755 = rwxr-xr-x = владелец всё, остальные читают/выполняют
+```
+
+---
+
+### Практический пример
+
+Создать рабочую папку:
+
+```bash
+mkdir -p ~/linux-lab/diagnostics
+cd ~/linux-lab/diagnostics
+pwd
+```
+
+Создать файл:
+
+```bash
+echo "secret config" > denied-demo.txt
+cat denied-demo.txt
+ls -l denied-demo.txt
+```
+
+Обычные права могут выглядеть так:
+
+```text
+-rw-rw-r-- 1 germanix germanix ... denied-demo.txt
+```
+
+Смысл:
+
+```text
+owner germanix может читать и писать;
+group germanix может читать и писать;
+others могут читать.
+```
+
+Запретить запись даже владельцу:
+
+```bash
+chmod 400 denied-demo.txt
+ls -l denied-demo.txt
+```
+
+Ожидаемо:
+
+```text
+-r-------- 1 germanix germanix ... denied-demo.txt
+```
+
+Теперь попытаться дописать строку:
+
+```bash
+echo "new line" >> denied-demo.txt
+```
+
+Ожидаемо:
+
+```text
+Permission denied
+```
+
+Почему:
+
+```text
+>> пытается дописать в файл;
+для записи нужно право w;
+у владельца права только r;
+write-права нет.
+```
+
+---
+
+### Диагностика Permission denied
+
+После ошибки не исправлять вслепую. Сначала проверить.
+
+```bash
+stat denied-demo.txt
+id
+```
+
+`stat` показывает подробную информацию о файле:
+
+```text
+права;
+владельца;
+группу;
+размер;
+inode;
+временные метки.
+```
+
+Пример важной строки:
+
+```text
+Access: (0400/-r--------)  Uid: (1000/germanix)  Gid: (1000/germanix)
+```
+
+Смысл:
+
+```text
+0400 = права файла;
+-r-------- = текстовая форма прав;
+Uid germanix = владелец;
+Gid germanix = группа.
+```
+
+Команда:
+
+```bash
+id
+```
+
+показывает:
+
+```text
+какой у меня UID;
+какая основная группа;
+в каких группах я состою.
+```
+
+---
+
+### Исправление
+
+Вернуть владельцу право записи:
+
+```bash
+chmod 600 denied-demo.txt
+ls -l denied-demo.txt
+```
+
+Ожидаемо:
+
+```text
+-rw------- 1 germanix germanix ... denied-demo.txt
+```
+
+Теперь запись сработает:
+
+```bash
+echo "new line" >> denied-demo.txt
+cat denied-demo.txt
+```
+
+Ожидаемо:
+
+```text
+secret config
+new line
+```
+
+---
+
+### Диагностическая схема Permission denied
+
+```text
+1. Что я пытаюсь сделать?
+   читать / писать / выполнить / войти в каталог / открыть порт
+
+2. Кто я?
+   id
+
+3. Кто владелец объекта?
+   ls -l file
+   stat file
+
+4. Какие права у owner/group/others?
+
+5. Есть ли нужное право?
+   r для чтения
+   w для записи
+   x для выполнения/входа в каталог
+
+6. Исправление:
+   chmod — изменить права
+   chown — изменить владельца
+   sudo — выполнить с повышенными правами, если это оправдано
+```
+
+Важно:
+
+```text
+sudo не надо использовать автоматически.
+Сначала понять причину.
+```
+
+---
+
+### Ключевой вывод
+
+```text
+Permission denied =
+нет прав на конкретное действие.
+
+В примере:
+файл принадлежал germanix,
+но chmod 400 убрал write-право.
+Поэтому >> не смог дописать строку.
+После chmod 600 запись снова заработала.
+```
+
+---
+
+## 5. Connection refused
+
+### Что значит Connection refused
+
+Ошибка:
+
+```text
+Connection refused
+```
+
+или:
+
+```text
+Couldn't connect to server
+```
+
+означает:
+
+```text
+IP доступен,
+но на нужном порту нет процесса,
+который принимает подключение.
+```
+
+Важно:
+
+```text
+Это не обязательно проблема сети.
+Это часто проблема сервиса/порта.
+```
+
+---
+
+### Пример с пустым портом 8080
+
+Команда:
+
+```bash
+curl --head http://127.0.0.1:8080
+```
+
+Если на 8080 никто не слушает, получим:
+
+```text
+Failed to connect to 127.0.0.1 port 8080
+Couldn't connect to server
+```
+
+Проверка:
+
+```bash
+sudo ss -tulpn | grep :8080 || echo "nothing listens on 8080"
+```
+
+Ожидаемо:
+
+```text
+nothing listens on 8080
+```
+
+Вывод:
+
+```text
+curl не подключился к 8080,
+потому что ss подтверждает:
+на 8080 нет слушающего процесса.
+```
+
+---
+
+### Пример с остановленным nginx
+
+Остановить nginx:
+
+```bash
+sudo systemctl stop nginx
+```
+
+Проверить статус:
+
+```bash
+systemctl status nginx --no-pager
+```
+
+Ожидаемо:
+
+```text
+Active: inactive (dead)
+```
+
+Проверить порт 80:
+
+```bash
+sudo ss -tulpn | grep :80 || echo "nothing listens on 80"
+```
+
+Ожидаемо:
+
+```text
+nothing listens on 80
+```
+
+Проверить curl:
+
+```bash
+curl --head http://127.0.0.1
+```
+
+Ожидаемо:
+
+```text
+Failed to connect to 127.0.0.1 port 80
+Couldn't connect to server
+```
+
+Смысл:
+
+```text
+127.0.0.1 доступен;
+но nginx остановлен;
+порт 80 пустой;
+curl не может подключиться.
+```
+
+---
+
+### Запуск nginx обратно
+
+```bash
+sudo systemctl start nginx
+systemctl status nginx --no-pager
+sudo ss -tulpn | grep :80
+curl --head http://127.0.0.1
+```
+
+Ожидаемо:
+
+```text
+nginx active;
+порт 80 снова LISTEN;
+curl получает HTTP/1.1 200 OK.
+```
+
+---
+
+### Диагностическая схема Connection refused
+
+```text
+1. Проверить адрес:
+   правильный ли IP/hostname?
+
+2. Проверить порт:
+   sudo ss -tulpn | grep :PORT
+
+3. Проверить сервис:
+   systemctl status SERVICE --no-pager
+
+4. Проверить процессы:
+   pgrep -a PROCESS
+
+5. Проверить локально:
+   curl --head http://127.0.0.1:PORT
+
+6. Если локально работает, а снаружи нет:
+   смотреть bind address, firewall, сеть, маршрут.
+```
+
+---
+
+### Ключевой вывод
+
+```text
+Connection refused =
+машина доступна,
+но на указанном порту нет процесса,
+который принимает подключение.
+```
+
+---
+
+## 6. DNS / network issue
+
+### Главная идея
+
+Когда “интернет не работает”, нельзя сразу говорить:
+
+```text
+сломался интернет
+```
+
+Нужно проверять по слоям:
+
+```text
+1. Есть ли IP?
+2. Есть ли маршрут?
+3. Есть ли связь по IP?
+4. Работает ли DNS?
+5. Работает ли HTTP/HTTPS?
+```
+
+Диагностическая цепочка:
+
+```bash
+ip -br a
+ip route
+ping -c 4 8.8.8.8
+ping -c 4 google.com
+curl --head https://google.com
+getent hosts google.com
+```
+
+---
+
+### 1. ip -br a
+
+Команда:
+
+```bash
+ip -br a
+```
+
+Проверяет:
+
+```text
+есть ли сетевые интерфейсы;
+есть ли IP-адреса;
+подняты ли интерфейсы.
+```
+
+В нашей VM:
+
+```text
+enp0s3 = NAT, интернет VM
+enp0s8 = Host-only, SSH Windows → Ubuntu
+```
+
+Пример:
+
+```text
+enp0s3 UP 10.0.2.15/24
+enp0s8 UP 192.168.56.101/24
+```
+
+Смысл:
+
+```text
+у Ubuntu есть IP для NAT-интернета;
+у Ubuntu есть IP для SSH с Windows.
+```
+
+---
+
+### 2. ip route
+
+Команда:
+
+```bash
+ip route
+```
+
+Проверяет:
+
+```text
+куда Linux отправляет сетевой трафик.
+```
+
+Главная строка:
+
+```text
+default via 10.0.2.2 dev enp0s3
+```
+
+Смысл:
+
+```text
+если Linux не знает специальный маршрут,
+он отправляет трафик через gateway 10.0.2.2
+по интерфейсу enp0s3.
+```
+
+Если default route нет:
+
+```text
+машина может иметь IP,
+но не понимать,
+куда отправлять трафик наружу.
+```
+
+---
+
+### 3. ping 8.8.8.8
+
+Команда:
+
+```bash
+ping -c 4 8.8.8.8
+```
+
+Проверяет:
+
+```text
+может ли Ubuntu достучаться до внешнего IP.
+```
+
+Если:
+
+```text
+4 packets transmitted, 4 received, 0% packet loss
+```
+
+значит:
+
+```text
+связь по IP есть;
+маршрут наружу работает;
+NAT VirtualBox работает.
+```
+
+Эта проверка не проверяет DNS, потому что используется готовый IP.
+
+---
+
+### 4. ping google.com
+
+Команда:
+
+```bash
+ping -c 4 google.com
+```
+
+Проверяет:
+
+```text
+может ли Ubuntu превратить google.com в IP
+и получить ответ.
+```
+
+Если:
+
+```text
+ping 8.8.8.8 работает,
+ping google.com не работает
+```
+
+вероятный вывод:
+
+```text
+интернет по IP есть;
+проблема с DNS.
+```
+
+---
+
+### 5. curl --head https://google.com
+
+Команда:
+
+```bash
+curl --head https://google.com
+```
+
+Проверяет:
+
+```text
+работает ли HTTP/HTTPS-доступ.
+```
+
+Пример ответа:
+
+```text
+HTTP/2 301
+location: https://www.google.com/
+```
+
+Смысл:
+
+```text
+сайт доступен;
+HTTPS работает;
+301 = redirect, не ошибка.
+```
+
+---
+
+### 6. getent hosts google.com
+
+Команда:
+
+```bash
+getent hosts google.com
+```
+
+Проверяет:
+
+```text
+во что система резолвит доменное имя.
+```
+
+Пример:
+
+```text
+142.250.120.138 google.com
+```
+
+или IPv6-адреса:
+
+```text
+2a00:1450:4025:807::64 google.com
+```
+
+Смысл:
+
+```text
+системный DNS-резолвинг работает.
+```
+
+---
+
+### Диагностическая схема DNS / network
+
+```text
+ip -br a
+есть ли IP?
+
+ip route
+есть ли default route?
+
+ping -c 4 8.8.8.8
+есть ли связь по IP без DNS?
+
+ping -c 4 google.com
+работает ли DNS + связь?
+
+curl --head https://google.com
+работает ли HTTP/HTTPS?
+
+getent hosts google.com
+во что система резолвит домен?
+```
+
+---
+
+### Типовые выводы
+
+```text
+ping 8.8.8.8 не работает
+→ проблема может быть в маршруте, NAT, gateway, сети хоста, firewall.
+
+ping 8.8.8.8 работает,
+ping google.com не работает
+→ вероятно DNS.
+
+ping работает,
+curl не работает
+→ проблема может быть на HTTP/HTTPS, proxy, firewall, TLS, сайте.
+
+default route нет
+→ машине некуда отправлять трафик наружу.
+
+getent hosts google.com возвращает адреса
+→ DNS-резолвинг работает.
+```
+
+---
+
+## 7. Общая карта диагностики Linux 2.10
+
+### command not found
+
+```text
+Симптом:
+command not found
+
+Проверки:
+command -v COMMAND
+dpkg -l | grep PACKAGE
+apt list --installed | grep PACKAGE
+
+Причины:
+опечатка;
+пакет не установлен;
+команда не в PATH.
+```
+
+---
+
+### Permission denied
+
+```text
+Симптом:
+Permission denied
+
+Проверки:
+ls -l file
+stat file
+id
+
+Причины:
+нет read/write/execute;
+не тот владелец;
+не та группа;
+нужно sudo;
+системный порт.
+```
+
+---
+
+### service failed
+
+```text
+Симптом:
+service failed
+
+Проверки:
+systemctl status SERVICE --no-pager
+journalctl -u SERVICE -n 30 --no-pager
+
+Для nginx:
+sudo nginx -t
+
+Причины:
+сломанный конфиг;
+порт занят;
+нет прав;
+нет файла;
+ошибка запуска.
+```
+
+---
+
+### Address already in use
+
+```text
+Симптом:
+Address already in use
+
+Проверка:
+sudo ss -tulpn | grep :PORT
+
+Причина:
+IP:PORT уже держит другой процесс.
+```
+
+---
+
+### Connection refused
+
+```text
+Симптом:
+Connection refused
+
+Проверки:
+sudo ss -tulpn | grep :PORT
+systemctl status SERVICE
+curl --head URL
+
+Причина:
+IP доступен,
+но на порту нет слушающего процесса.
+```
+
+---
+
+### DNS / network issue
+
+```text
+Симптом:
+не работает сеть/интернет/домен
+
+Проверки:
+ip -br a
+ip route
+ping -c 4 8.8.8.8
+ping -c 4 google.com
+curl --head https://google.com
+getent hosts google.com
+```
+
+---
+
+## 8. Главный вывод блока
+
+```text
+Диагностика = не угадывание.
+
+Нужно идти по слоям:
+
+1. Что сломалось?
+2. Какой симптом?
+3. Какая команда проверяет этот слой?
+4. Что показывает вывод?
+5. Какая вероятная причина?
+6. Как исправить?
+7. Как проверить, что исправление сработало?
+```
+
+Для сервисов:
+
+```text
+systemctl → journalctl → service-specific check → fix → restart → status
+```
+
+Для nginx:
+
+```text
+nginx -t → systemctl restart nginx → status → journalctl
+```
+
+Для портов:
+
+```text
+ss → process → port → curl
+```
+
+Для сети:
+
+```text
+ip → route → ping IP → ping domain → curl → getent
+```
+
+Для прав:
+
+```text
+id → ls -l/stat → chmod/chown/sudo
+```
+
+Для команд:
+
+```text
+command -v → dpkg/apt → PATH
+```
+
+Ключевая рабочая фраза:
+
+```text
+Я не просто ввожу команды.
+Я проверяю слой системы и доказываю причину.
+```
